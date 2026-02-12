@@ -4,7 +4,8 @@ Web-based visualization tool for [bio2token](https://github.com/flagshippioneeri
 
 Split-pane UI: tokenized bio2token input on the left, live 3D structure rendering on the right.
 
-![screenshot](https://img.shields.io/badge/3Dmol.js-viewer-blue)
+<img width="1564" height="884" alt="image" src="https://github.com/user-attachments/assets/80eb99cf-0da6-4e36-bd59-e3f2a9a79bb5" />
+
 
 ## Features
 
