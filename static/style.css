@@ -143,6 +143,11 @@ select {
     color: #555;
 }
 
+#token-editor::selection {
+    background: #e94560;
+    color: #fff;
+}
+
 /* Metadata panel */
 .metadata-panel {
     border-top: 1px solid #0f3460;

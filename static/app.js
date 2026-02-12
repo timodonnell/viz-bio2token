@@ -38,21 +38,25 @@
     }
 
     // --- Token parsing ---
-    function parseTokens(text) {
-        text = text.trim();
-        if (!text) return [];
-
-        const tokens = [];
-        // Match <bNNN> format or plain numbers
+    // Returns {ids: number[], spans: [{start, end}, ...]}
+    // spans[i] gives the character range in the original text for token i
+    function parseTokensWithSpans(text) {
+        const ids = [];
+        const spans = [];
         const regex = /<b(\d+)>|(\d+)/g;
         let match;
         while ((match = regex.exec(text)) !== null) {
             const num = parseInt(match[1] || match[2], 10);
             if (!isNaN(num) && num >= 0 && num <= 4095) {
-                tokens.push(num);
+                ids.push(num);
+                spans.push({ start: match.index, end: match.index + match[0].length });
             }
         }
-        return tokens;
+        return { ids, spans };
+    }
+
+    function parseTokens(text) {
+        return parseTokensWithSpans(text).ids;
     }
 
     // --- Metadata parsing ---
@@ -147,11 +151,83 @@
         return await res.json();
     }
 
+    // --- Atom click → token highlight ---
+    let highlightedAtomIdx = -1;  // currently highlighted token index
+
+    function onAtomClicked(atom) {
+        if (!atom) return;
+        // atom.serial is 1-based PDB serial → token index is serial - 1
+        const tokenIdx = atom.serial - 1;
+        highlightTokenInEditor(tokenIdx);
+        highlightAtomInViewer(tokenIdx);
+    }
+
+    function highlightTokenInEditor(tokenIdx) {
+        const { spans } = parseTokensWithSpans(tokenEditor.value);
+        if (tokenIdx < 0 || tokenIdx >= spans.length) return;
+
+        const span = spans[tokenIdx];
+        tokenEditor.focus();
+        tokenEditor.setSelectionRange(span.start, span.end);
+
+        // Scroll the selection into view — place the token roughly in the middle
+        // by computing approximate scroll position from character offset
+        const textBefore = tokenEditor.value.substring(0, span.start);
+        const linesBefore = textBefore.split("\n").length - 1;
+        const lineHeight = parseInt(getComputedStyle(tokenEditor).lineHeight) || 21;
+        const targetScroll = Math.max(0, linesBefore * lineHeight - tokenEditor.clientHeight / 2);
+        tokenEditor.scrollTop = targetScroll;
+
+        highlightedAtomIdx = tokenIdx;
+    }
+
+    function highlightAtomInViewer(tokenIdx) {
+        if (!viewer || !currentDecodedPdb) return;
+
+        const style = styleSelect.value;
+
+        // Reset all decoded atoms to normal style (model 0)
+        const normalSpec = getStyleSpec(style, false);
+        viewer.setStyle({ model: 0 }, normalSpec);
+
+        // Highlight the clicked atom: bright yellow, larger
+        if (tokenIdx >= 0) {
+            viewer.setStyle(
+                { model: 0, serial: tokenIdx + 1 },
+                { sphere: { color: "#ffe033", radius: 0.6 } }
+            );
+            // Add a label
+            viewer.removeAllLabels();
+            const atoms = viewer.getModel(0).selectedAtoms({ serial: tokenIdx + 1 });
+            if (atoms.length > 0) {
+                const a = atoms[0];
+                const label = `${a.atom} ${a.resn}${a.resi} [token ${tokenIdx}]`;
+                viewer.addLabel(label, {
+                    position: { x: a.x, y: a.y, z: a.z },
+                    fontSize: 12,
+                    backgroundColor: "rgba(0,0,0,0.7)",
+                    fontColor: "#ffe033",
+                    borderRadius: 4,
+                    padding: 4,
+                });
+            }
+        }
+
+        // Re-apply original model style if shown
+        if (currentOriginalPdb && showOriginalCheckbox.checked) {
+            const origSpec = getStyleSpec(style, true);
+            viewer.setStyle({ model: 1 }, origSpec);
+        }
+
+        viewer.render();
+    }
+
     // --- Rendering ---
     function renderStructures() {
         if (!viewer) return;
         viewer.removeAllModels();
         viewer.removeAllLabels();
+        highlightedAtomIdx = -1;
 
         const style = styleSelect.value;
 
@@ -159,6 +235,9 @@
             const model = viewer.addModel(currentDecodedPdb, "pdb");
             const styleSpec = getStyleSpec(style, false);
             viewer.setStyle({ model: model.getID() }, styleSpec);
+
+            // Make decoded atoms clickable
+            viewer.setClickable({ model: model.getID() }, true, onAtomClicked);
         }
 
         if (currentOriginalPdb && showOriginalCheckbox.checked) {
