@@ -1,0 +1,247 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: #1a1a2e;
+    color: #e0e0e0;
+}
+
+/* Header */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 16px;
+    background: #16213e;
+    border-bottom: 1px solid #0f3460;
+    flex-shrink: 0;
+}
+
+header h1 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #e94560;
+    margin-right: 12px;
+}
+
+.header-left, .header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.status {
+    font-size: 12px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+}
+
+.status.loading {
+    background: #533a00;
+    color: #ffb347;
+}
+
+.status.ready {
+    background: #1b4332;
+    color: #52b788;
+}
+
+.status.error {
+    background: #5c1a1a;
+    color: #ff6b6b;
+}
+
+.file-upload-btn {
+    font-size: 13px;
+    padding: 5px 12px;
+    background: #0f3460;
+    border: 1px solid #1a508b;
+    color: #e0e0e0;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.file-upload-btn:hover {
+    background: #1a508b;
+}
+
+select {
+    font-size: 13px;
+    padding: 5px 8px;
+    background: #0f3460;
+    border: 1px solid #1a508b;
+    color: #e0e0e0;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.checkbox-label {
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+}
+
+.checkbox-label input:disabled {
+    opacity: 0.5;
+}
+
+/* Split pane layout */
+.split-pane {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+.left-pane {
+    width: 40%;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    background: #16213e;
+}
+
+.pane-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px;
+    background: #0f3460;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.token-count {
+    font-size: 12px;
+    color: #a0a0b0;
+}
+
+#token-editor {
+    flex: 1;
+    padding: 12px;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    border: none;
+    resize: none;
+    font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    outline: none;
+}
+
+#token-editor::placeholder {
+    color: #555;
+}
+
+/* Metadata panel */
+.metadata-panel {
+    border-top: 1px solid #0f3460;
+    background: #12192e;
+    font-size: 13px;
+}
+
+.metadata-panel summary {
+    padding: 6px 12px;
+    cursor: pointer;
+    color: #a0a0b0;
+    user-select: none;
+}
+
+.metadata-panel summary:hover {
+    color: #e0e0e0;
+}
+
+.metadata-fields {
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.metadata-fields label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    color: #a0a0b0;
+    font-size: 12px;
+}
+
+.metadata-fields textarea {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    border: 1px solid #0f3460;
+    border-radius: 3px;
+    padding: 4px 8px;
+    font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+    font-size: 12px;
+    resize: vertical;
+    outline: none;
+}
+
+.metadata-fields textarea:focus {
+    border-color: #1a508b;
+}
+
+.metadata-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.metadata-actions button {
+    font-size: 12px;
+    padding: 3px 8px;
+    background: #0f3460;
+    border: 1px solid #1a508b;
+    color: #e0e0e0;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.metadata-actions button:hover {
+    background: #1a508b;
+}
+
+.meta-status {
+    font-size: 11px;
+    color: #a0a0b0;
+}
+
+/* Divider */
+.divider {
+    width: 4px;
+    background: #0f3460;
+    cursor: col-resize;
+    flex-shrink: 0;
+    transition: background 0.2s;
+}
+
+.divider:hover, .divider.active {
+    background: #e94560;
+}
+
+/* Right pane */
+.right-pane {
+    flex: 1;
+    position: relative;
+    min-width: 200px;
+}
+
+#viewer-container {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+}

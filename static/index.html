@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>viz-bio2token</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://3Dmol.org/build/3Dmol-min.js"></script>
+</head>
+<body>
+    <header>
+        <div class="header-left">
+            <h1>viz-bio2token</h1>
+            <span id="status-indicator" class="status loading">Loading model...</span>
+        </div>
+        <div class="header-right">
+            <label class="file-upload-btn">
+                Upload PDB/CIF
+                <input type="file" id="file-input" accept=".pdb,.cif" hidden>
+            </label>
+            <select id="style-select">
+                <option value="stick">Stick</option>
+                <option value="cartoon">Cartoon</option>
+                <option value="sphere">Sphere</option>
+                <option value="line">Line</option>
+            </select>
+            <label class="checkbox-label">
+                <input type="checkbox" id="show-original" disabled>
+                Show original
+            </label>
+        </div>
+    </header>
+
+    <div class="split-pane">
+        <div class="left-pane" id="left-pane">
+            <div class="pane-header">
+                <span>Tokens</span>
+                <span id="token-count" class="token-count">0 tokens</span>
+            </div>
+            <textarea id="token-editor" placeholder="Paste bio2token tokens here, e.g.:&#10;<b2239> <b2751> <b2619> <b1082>&#10;&#10;or plain numbers:&#10;2239 2751 2619 1082"></textarea>
+
+            <details id="metadata-panel" class="metadata-panel">
+                <summary>Metadata (atom names, residue types, residue IDs)</summary>
+                <div class="metadata-fields">
+                    <label>
+                        Atom names (comma-separated):
+                        <textarea id="meta-atom-names" rows="3" placeholder="CA, CA, CA, ..."></textarea>
+                    </label>
+                    <label>
+                        Residue types (comma-separated):
+                        <textarea id="meta-residue-types" rows="3" placeholder="ALA, ALA, ALA, ..."></textarea>
+                    </label>
+                    <label>
+                        Residue IDs (comma-separated):
+                        <textarea id="meta-residue-ids" rows="3" placeholder="0, 1, 2, ..."></textarea>
+                    </label>
+                    <div class="metadata-actions">
+                        <button id="meta-clear" title="Clear metadata and use defaults">Clear metadata</button>
+                        <span id="meta-status" class="meta-status"></span>
+                    </div>
+                </div>
+            </details>
+        </div>
+
+        <div class="divider" id="divider"></div>
+
+        <div class="right-pane" id="right-pane">
+            <div id="viewer-container"></div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
