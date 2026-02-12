@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import os
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
+import httpx
 import uvicorn
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -39,6 +41,7 @@ class DecodeRequest(BaseModel):
     atom_names: Optional[list[str]] = None
     residue_types: Optional[list[str]] = None
     residue_ids: Optional[list[int]] = None
+    chain_ids: Optional[list[str]] = None
     gt_pdb_string: Optional[str] = None
 
 
@@ -57,6 +60,7 @@ class EncodeResponse(BaseModel):
     residue_ids: list[int]
     residue_names: list[str]
     token_classes: list[int]
+    chain_ids: list[str]
 
 
 class StatusResponse(BaseModel):
@@ -83,6 +87,7 @@ async def decode(req: DecodeRequest):
         atom_names=req.atom_names,
         residue_types=req.residue_types,
         residue_ids=req.residue_ids,
+        chain_ids=req.chain_ids,
         gt_pdb_string=req.gt_pdb_string,
     )
     return DecodeResponse(pdb_string=result.pdb_string, num_atoms=result.num_atoms)
@@ -110,6 +115,46 @@ async def encode(file: UploadFile = File(...)):
         residue_ids=result.residue_ids,
         residue_names=result.residue_names,
         token_classes=result.token_classes,
+        chain_ids=result.chain_ids,
+    )
+
+
+class PdbCodeRequest(BaseModel):
+    pdb_code: str
+
+
+@app.post("/api/encode-pdb-code", response_model=EncodeResponse)
+async def encode_pdb_code(req: PdbCodeRequest):
+    if not bridge.model_loaded:
+        raise HTTPException(status_code=503, detail="Model not loaded yet")
+
+    code = req.pdb_code.strip().upper()
+    if not re.match(r"^[A-Z0-9]{4}$", code):
+        raise HTTPException(status_code=400, detail=f"Invalid PDB code: {req.pdb_code}")
+
+    # Try PDB format first, fall back to CIF
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.get(f"https://files.rcsb.org/download/{code}.pdb")
+        if resp.status_code == 200:
+            content = resp.text
+        else:
+            resp = await client.get(f"https://files.rcsb.org/download/{code}.cif")
+            if resp.status_code != 200:
+                raise HTTPException(status_code=404, detail=f"PDB code {code} not found on RCSB")
+            content = cif_to_pdb(resp.text)
+
+    result = bridge.encode_pdb(content, filename=f"{code}.pdb")
+    return EncodeResponse(
+        token_ids=result.token_ids,
+        token_string=result.token_string,
+        num_tokens=result.num_tokens,
+        gt_pdb_string=result.gt_pdb_string,
+        atom_names=result.atom_names,
+        residue_types=result.residue_types,
+        residue_ids=result.residue_ids,
+        residue_names=result.residue_names,
+        token_classes=result.token_classes,
+        chain_ids=result.chain_ids,
     )
 
 

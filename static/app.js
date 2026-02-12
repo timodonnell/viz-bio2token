@@ -37,16 +37,20 @@
         viewer.resize();
     }
 
+    // PDB code elements
+    const pdbCodeInput = document.getElementById("pdb-code-input");
+    const pdbCodeLoad = document.getElementById("pdb-code-load");
+
     // --- Token parsing ---
     // Returns {ids: number[], spans: [{start, end}, ...]}
     // spans[i] gives the character range in the original text for token i
     function parseTokensWithSpans(text) {
         const ids = [];
         const spans = [];
-        const regex = /<b(\d+)>|(\d+)/g;
+        const regex = /(\d+)/g;
         let match;
         while ((match = regex.exec(text)) !== null) {
-            const num = parseInt(match[1] || match[2], 10);
+            const num = parseInt(match[1], 10);
             if (!isNaN(num) && num >= 0 && num <= 4095) {
                 ids.push(num);
                 spans.push({ start: match.index, end: match.index + match[0].length });
@@ -116,6 +120,10 @@
             if (metadata.residue_types) body.residue_types = metadata.residue_types;
             if (metadata.residue_ids) body.residue_ids = metadata.residue_ids;
         }
+        // chain_ids aren't editable in the UI, always use storedMetadata
+        if (storedMetadata && storedMetadata.chain_ids) {
+            body.chain_ids = storedMetadata.chain_ids;
+        }
 
         // Send ground-truth PDB for Kabsch alignment when available
         if (currentOriginalPdb) {
@@ -149,6 +157,41 @@
             throw new Error(err.detail || "Encode failed");
         }
         return await res.json();
+    }
+
+    async function encodePdbCode(code) {
+        const res = await fetch("/api/encode-pdb-code", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pdb_code: code }),
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "PDB fetch failed");
+        }
+        return await res.json();
+    }
+
+    async function handleEncodeResult(result) {
+        tokenEditor.value = result.token_string;
+        tokenCount.textContent = `${result.num_tokens} tokens`;
+        currentOriginalPdb = result.gt_pdb_string;
+
+        storedMetadata = {
+            atom_names: result.atom_names,
+            residue_types: result.residue_types,
+            residue_ids: result.residue_ids,
+            chain_ids: result.chain_ids,
+        };
+        populateMetadataFields(storedMetadata);
+
+        showOriginalCheckbox.disabled = false;
+        showOriginalCheckbox.checked = true;
+
+        const decoded = await decodeTokens(result.token_ids);
+        currentDecodedPdb = decoded.pdb_string;
+        renderStructures();
     }
 
     // --- Atom click → token highlight ---
@@ -186,9 +229,8 @@
 
         const style = styleSelect.value;
 
-        // Reset all decoded atoms to normal style (model 0)
-        const normalSpec = getStyleSpec(style, false);
-        viewer.setStyle({ model: 0 }, normalSpec);
+        // Reset all decoded atoms to chain-colored style (model 0)
+        applyChainColors(0);
 
         // Highlight the clicked atom: bright yellow, larger
         if (tokenIdx >= 0) {
@@ -233,8 +275,7 @@
 
         if (currentDecodedPdb) {
             const model = viewer.addModel(currentDecodedPdb, "pdb");
-            const styleSpec = getStyleSpec(style, false);
-            viewer.setStyle({ model: model.getID() }, styleSpec);
+            applyChainColors(model.getID());
 
             // Make decoded atoms clickable
             viewer.setClickable({ model: model.getID() }, true, onAtomClicked);
@@ -250,10 +291,17 @@
         viewer.render();
     }
 
+    // Chain color palette — distinct colors for up to 12 chains
+    const CHAIN_COLORS = [
+        "#e94560", "#52b788", "#4895ef", "#f9c74f",
+        "#f3722c", "#90be6d", "#577590", "#f94144",
+        "#43aa8b", "#9b5de5", "#00bbf9", "#fee440",
+    ];
+
     function getStyleSpec(style, isOriginal) {
         const colorSpec = isOriginal
             ? { color: "#888888" }
-            : { colorscheme: "spectral" };
+            : { colorscheme: "chain" };
         const opacity = isOriginal ? 0.5 : 1.0;
 
         switch (style) {
@@ -268,6 +316,35 @@
             default:
                 return { stick: { ...colorSpec, opacity, radius: 0.15 } };
         }
+    }
+
+    function applyChainColors(modelId) {
+        // Get unique chains from the model and assign distinct colors
+        const atoms = viewer.getModel(modelId).selectedAtoms({});
+        const chains = [...new Set(atoms.map(a => a.chain))];
+        const style = styleSelect.value;
+
+        chains.forEach((chain, idx) => {
+            const color = CHAIN_COLORS[idx % CHAIN_COLORS.length];
+            const spec = {};
+            switch (style) {
+                case "cartoon":
+                    spec.cartoon = { color, opacity: 1.0 };
+                    break;
+                case "stick":
+                    spec.stick = { color, opacity: 1.0, radius: 0.15 };
+                    break;
+                case "sphere":
+                    spec.sphere = { color, opacity: 1.0, scale: 0.3 };
+                    break;
+                case "line":
+                    spec.line = { color, opacity: 1.0 };
+                    break;
+                default:
+                    spec.stick = { color, opacity: 1.0, radius: 0.15 };
+            }
+            viewer.setStyle({ model: modelId, chain }, spec);
+        });
     }
 
     // --- Debounced decode ---
@@ -322,27 +399,7 @@
 
         try {
             const result = await encodeFile(file);
-            tokenEditor.value = result.token_string;
-            tokenCount.textContent = `${result.num_tokens} tokens`;
-            currentOriginalPdb = result.gt_pdb_string;
-
-            // Store metadata and populate UI fields
-            storedMetadata = {
-                atom_names: result.atom_names,
-                residue_types: result.residue_types,
-                residue_ids: result.residue_ids,
-            };
-            populateMetadataFields(storedMetadata);
-
-            // Enable "Show original" checkbox
-            showOriginalCheckbox.disabled = false;
-            showOriginalCheckbox.checked = true;
-
-            // Decode the tokens to get reconstructed structure
-            const decoded = await decodeTokens(result.token_ids);
-            currentDecodedPdb = decoded.pdb_string;
-            renderStructures();
-
+            await handleEncodeResult(result);
             statusIndicator.textContent = `Encoded ${result.num_tokens} tokens`;
             statusIndicator.className = "status ready";
         } catch (e) {
@@ -350,8 +407,29 @@
             statusIndicator.className = "status error";
         }
 
-        // Reset file input so re-uploading same file triggers change
         fileInput.value = "";
+    });
+
+    async function loadPdbCode(code) {
+        if (!code || !modelReady) return;
+
+        statusIndicator.textContent = `Loading ${code.toUpperCase()}...`;
+        statusIndicator.className = "status loading";
+
+        try {
+            const result = await encodePdbCode(code);
+            await handleEncodeResult(result);
+            statusIndicator.textContent = `${code.toUpperCase()}: ${result.num_tokens} tokens`;
+            statusIndicator.className = "status ready";
+        } catch (e) {
+            statusIndicator.textContent = e.message;
+            statusIndicator.className = "status error";
+        }
+    }
+
+    pdbCodeLoad.addEventListener("click", () => loadPdbCode(pdbCodeInput.value.trim()));
+    pdbCodeInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") loadPdbCode(pdbCodeInput.value.trim());
     });
 
     styleSelect.addEventListener("change", renderStructures);
@@ -397,10 +475,10 @@
                 modelReady = true;
                 statusIndicator.textContent = "Ready";
                 statusIndicator.className = "status ready";
-                // Trigger decode if there are tokens already in the editor
-                const tokens = parseTokens(tokenEditor.value);
-                if (tokens.length > 0) {
-                    scheduleDecode();
+                // Auto-load default PDB code on first ready
+                const code = pdbCodeInput.value.trim();
+                if (code && parseTokens(tokenEditor.value).length === 0) {
+                    loadPdbCode(code);
                 }
                 return;
             }

@@ -38,6 +38,7 @@ class EncodeResult:
     residue_ids: list[int]
     residue_names: list[str]
     token_classes: list[int]
+    chain_ids: list[str]
 
 
 @dataclass
@@ -116,21 +117,29 @@ def _coords_to_pdb_string(
     atom_names: list[str],
     residue_types: list[str],
     residue_ids: list[int],
+    chain_ids: list[str] | None = None,
 ) -> str:
     """Generate a PDB-format string from coordinates and metadata."""
     lines = []
     atom_num = 1
     current_res_num = 1
     prev_res_id = residue_ids[0] if len(residue_ids) > 0 else 0
+    prev_chain = None
 
-    for coord, atom, res, res_id in zip(coords, atom_names, residue_types, residue_ids):
+    for i, (coord, atom, res, res_id) in enumerate(zip(coords, atom_names, residue_types, residue_ids)):
+        chain = chain_ids[i] if chain_ids else "A"
         if res_id != prev_res_id:
-            current_res_num += 1
+            if chain != prev_chain:
+                # Reset residue numbering for new chains
+                current_res_num = 1
+            else:
+                current_res_num += 1
             prev_res_id = res_id
+        prev_chain = chain
 
         # Standard PDB ATOM line format
         line = (
-            f"ATOM  {atom_num:5d}  {atom:<3s} {res:3s} A{current_res_num:4d}"
+            f"ATOM  {atom_num:5d}  {atom:<3s} {res:3s} {chain}{current_res_num:4d}"
             f"    {coord[0]:8.3f}{coord[1]:8.3f}{coord[2]:8.3f}"
             f"  1.00  0.00           {atom[0]:>2s}"
         )
@@ -180,7 +189,7 @@ def _kabsch_align(decoded: np.ndarray, target: np.ndarray) -> np.ndarray:
     return result
 
 
-def _generate_default_metadata(num_tokens: int) -> tuple[list[str], list[str], list[int], list[str], list[int]]:
+def _generate_default_metadata(num_tokens: int) -> tuple[list[str], list[str], list[int], list[str], list[int], list[str]]:
     """Generate default CA/ALA metadata when no real metadata is available.
 
     Each token maps to one ALA residue with a single CA atom (backbone-only).
@@ -190,7 +199,8 @@ def _generate_default_metadata(num_tokens: int) -> tuple[list[str], list[str], l
     residue_ids = list(range(num_tokens))
     residue_names = ["AA_A"] * num_tokens
     token_classes = [C_REF_CLASS] * num_tokens
-    return atom_names, residue_types, residue_ids, residue_names, token_classes
+    chain_ids = ["A"] * num_tokens
+    return atom_names, residue_types, residue_ids, residue_names, token_classes, chain_ids
 
 
 class Bio2TokenBridge:
@@ -262,6 +272,19 @@ class Bio2TokenBridge:
             pdb_dict["res_atom_end"],
         )
 
+        # Derive per-residue chain IDs from pdb_dict, then expand to per-atom
+        # (matching the structure of residue_ids from uniform_dataframe)
+        raw_chains = pdb_dict["chains"]
+        res_atom_start = pdb_dict["res_atom_start"]
+        chain_per_residue = [raw_chains[s] for s in res_atom_start]
+
+        # uniform_dataframe creates residue_size atoms per residue (BB + SC)
+        # We can derive residue_size from the residue_ids array
+        from collections import Counter
+        res_id_counts = Counter(residue_ids.tolist() if hasattr(residue_ids, 'tolist') else residue_ids)
+        residue_sizes = [res_id_counts[i] for i in range(len(chain_per_residue))]
+        chain_ids_expanded = [chain_per_residue[i] for i in range(len(chain_per_residue)) for _ in range(residue_sizes[i])]
+
         # Build batch — filter out unknown atoms
         batch = {
             "structure": torch.tensor(structure).float(),
@@ -277,6 +300,7 @@ class Bio2TokenBridge:
         batch = {k: v[known_mask] for k, v in batch.items()}
         atom_names_known = [n for n, m in zip(atom_names_reordered, known_mask.numpy()) if m]
         residue_name_known = [n for n, m in zip(residue_name, known_mask.numpy()) if m]
+        chain_ids_known = [c for c, m in zip(chain_ids_expanded, known_mask.numpy()) if m]
 
         # Compute masks and add batch dimension
         batch = compute_masks(batch, structure_track=True)
@@ -289,7 +313,7 @@ class Bio2TokenBridge:
             parts = rn.split("_")
             res_types_for_pdb.append(ABBRS[parts[0]][parts[1]])
         res_ids_for_pdb = batch["residue_ids"][0].detach().cpu().numpy().tolist()
-        gt_pdb_string = _coords_to_pdb_string(gt_coords, atom_names_known, res_types_for_pdb, res_ids_for_pdb)
+        gt_pdb_string = _coords_to_pdb_string(gt_coords, atom_names_known, res_types_for_pdb, res_ids_for_pdb, chain_ids_known)
 
         # Encode
         with torch.no_grad():
@@ -300,8 +324,8 @@ class Bio2TokenBridge:
         indices = batch["indices"][0].cpu()
         valid_indices = indices[~eos_pad_mask].numpy().tolist()
 
-        # Build token string
-        token_string = " ".join(f"<b{idx}>" for idx in valid_indices)
+        # Build token string (plain integer format)
+        token_string = " ".join(str(idx) for idx in valid_indices)
 
         # Extract token_class for valid positions
         valid_token_classes = batch["token_class"][0][~eos_pad_mask].cpu().numpy().tolist()
@@ -316,6 +340,7 @@ class Bio2TokenBridge:
             residue_ids=res_ids_for_pdb,
             residue_names=residue_name_known,
             token_classes=valid_token_classes,
+            chain_ids=chain_ids_known,
         )
 
     def decode_tokens(
@@ -324,6 +349,7 @@ class Bio2TokenBridge:
         atom_names: list[str] | None = None,
         residue_types: list[str] | None = None,
         residue_ids: list[int] | None = None,
+        chain_ids: list[str] | None = None,
         gt_pdb_string: str | None = None,
     ) -> DecodeResult:
         """Decode bio2token token IDs back to a PDB string.
@@ -335,7 +361,7 @@ class Bio2TokenBridge:
 
         # Use provided metadata or fall back to defaults
         if atom_names is None or residue_types is None or residue_ids is None:
-            atom_names, residue_types, residue_ids, _, _ = _generate_default_metadata(num_tokens)
+            atom_names, residue_types, residue_ids, _, _, chain_ids = _generate_default_metadata(num_tokens)
 
         # Convert token IDs to encoding vectors via FSQ
         indices = torch.tensor(token_ids, dtype=torch.int32).to(self.device)
@@ -361,6 +387,6 @@ class Bio2TokenBridge:
                 coords = _kabsch_align(coords, gt_coords)
 
         # Generate PDB string
-        pdb_string = _coords_to_pdb_string(coords, atom_names, residue_types, residue_ids)
+        pdb_string = _coords_to_pdb_string(coords, atom_names, residue_types, residue_ids, chain_ids)
 
         return DecodeResult(pdb_string=pdb_string, num_atoms=num_tokens)

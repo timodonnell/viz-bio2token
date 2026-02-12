@@ -59,6 +59,44 @@ header h1 {
     color: #ff6b6b;
 }
 
+.pdb-code-group {
+    display: flex;
+    gap: 0;
+}
+
+.pdb-code-group input {
+    width: 70px;
+    font-size: 13px;
+    padding: 5px 8px;
+    background: #1a1a2e;
+    border: 1px solid #1a508b;
+    border-right: none;
+    border-radius: 4px 0 0 4px;
+    color: #e0e0e0;
+    font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+    text-transform: uppercase;
+    outline: none;
+}
+
+.pdb-code-group input:focus {
+    border-color: #e94560;
+}
+
+.pdb-code-group button {
+    font-size: 13px;
+    padding: 5px 10px;
+    background: #0f3460;
+    border: 1px solid #1a508b;
+    border-radius: 0 4px 4px 0;
+    color: #e0e0e0;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.pdb-code-group button:hover {
+    background: #1a508b;
+}
+
 .file-upload-btn {
     font-size: 13px;
     padding: 5px 12px;

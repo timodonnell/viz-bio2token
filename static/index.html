@@ -14,6 +14,10 @@
             <span id="status-indicator" class="status loading">Loading model...</span>
         </div>
         <div class="header-right">
+            <div class="pdb-code-group">
+                <input type="text" id="pdb-code-input" placeholder="PDB code" maxlength="4" value="6O4Y">
+                <button id="pdb-code-load">Load</button>
+            </div>
             <label class="file-upload-btn">
                 Upload PDB/CIF
                 <input type="file" id="file-input" accept=".pdb,.cif" hidden>
@@ -37,7 +41,7 @@
                 <span>Tokens</span>
                 <span id="token-count" class="token-count">0 tokens</span>
             </div>
-            <textarea id="token-editor" placeholder="Paste bio2token tokens here, e.g.:&#10;<b2239> <b2751> <b2619> <b1082>&#10;&#10;or plain numbers:&#10;2239 2751 2619 1082"></textarea>
+            <textarea id="token-editor" placeholder="Paste bio2token tokens here, e.g.:&#10;2239 2751 2619 1082 3131 3127 1591 2847"></textarea>
 
             <details id="metadata-panel" class="metadata-panel">
                 <summary>Metadata (atom names, residue types, residue IDs)</summary>
