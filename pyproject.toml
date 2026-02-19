@@ -14,6 +14,7 @@ dependencies = [
     "transformers<5",
     "httpx>=0.27.0",
     "bio2token",
+    "apt",
 ]
 
 [project.scripts]
@@ -29,6 +30,7 @@ no-build-package = ["torch", "torchvision", "torchaudio", "torch-geometric", "to
 mamba_ssm = { url = "https://github.com/state-spaces/mamba/releases/download/v2.2.2/mamba_ssm-2.2.2+cu122torch2.4cxx11abiFALSE-cp311-cp311-linux_x86_64.whl" }
 torch = { index = "pytorch" }
 bio2token = { path = "/home/ubuntu/bio2token", editable = true }
+apt = { git = "https://github.com/rdilip/apt.git" }
 
 [[tool.uv.index]]
 name = "pytorch"

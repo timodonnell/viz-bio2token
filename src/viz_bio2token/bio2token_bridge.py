@@ -33,12 +33,14 @@ class EncodeResult:
     token_string: str
     num_tokens: int
     gt_pdb_string: str
-    atom_names: list[str]
-    residue_types: list[str]
-    residue_ids: list[int]
-    residue_names: list[str]
-    token_classes: list[int]
-    chain_ids: list[str]
+    atom_names: list[str] | None = None
+    residue_types: list[str] | None = None
+    residue_ids: list[int] | None = None
+    residue_names: list[str] | None = None
+    token_classes: list[int] | None = None
+    chain_ids: list[str] | None = None
+    num_residues: int | None = None
+    max_tokens: int | None = None
 
 
 @dataclass

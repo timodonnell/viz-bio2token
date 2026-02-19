@@ -261,6 +261,46 @@ select {
     color: #a0a0b0;
 }
 
+/* APT options panel */
+.apt-options {
+    border-top: 1px solid #0f3460;
+    background: #12192e;
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
+.apt-options-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.apt-slider-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #a0a0b0;
+    font-size: 12px;
+    flex: 1;
+}
+
+.apt-slider-label input[type="range"] {
+    flex: 1;
+    accent-color: #e94560;
+    height: 4px;
+    cursor: pointer;
+}
+
+.apt-info {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #a0a0b0;
+}
+
+select option:disabled {
+    color: #555;
+}
+
 /* Divider */
 .divider {
     width: 4px;

@@ -14,6 +14,10 @@
             <span id="status-indicator" class="status loading">Loading model...</span>
         </div>
         <div class="header-right">
+            <select id="tokenizer-select">
+                <option value="bio2token">bio2token</option>
+                <option value="apt">APT</option>
+            </select>
             <div class="pdb-code-group">
                 <input type="text" id="pdb-code-input" placeholder="PDB code" maxlength="4" value="6O4Y">
                 <button id="pdb-code-load">Load</button>
@@ -64,6 +68,19 @@
                     </div>
                 </div>
             </details>
+
+            <div id="apt-options" class="apt-options" style="display: none;">
+                <div class="apt-options-row">
+                    <label class="apt-slider-label">
+                        Diffusion steps: <span id="apt-steps-value">100</span>
+                        <input type="range" id="apt-steps" min="10" max="500" value="100" step="10">
+                    </label>
+                </div>
+                <div class="apt-info">
+                    <span id="apt-num-residues">-</span> residues |
+                    <span id="apt-num-tokens">-</span> / 128 tokens
+                </div>
+            </div>
         </div>
 
         <div class="divider" id="divider"></div>

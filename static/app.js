@@ -14,12 +14,23 @@
     const divider = document.getElementById("divider");
     const leftPane = document.getElementById("left-pane");
 
-    // Metadata fields
+    // Metadata fields (bio2token)
     const metaAtomNames = document.getElementById("meta-atom-names");
     const metaResidueTypes = document.getElementById("meta-residue-types");
     const metaResidueIds = document.getElementById("meta-residue-ids");
     const metaClear = document.getElementById("meta-clear");
     const metaStatus = document.getElementById("meta-status");
+    const metadataPanel = document.getElementById("metadata-panel");
+
+    // Tokenizer selector
+    const tokenizerSelect = document.getElementById("tokenizer-select");
+
+    // APT options
+    const aptOptions = document.getElementById("apt-options");
+    const aptSteps = document.getElementById("apt-steps");
+    const aptStepsValue = document.getElementById("apt-steps-value");
+    const aptNumResidues = document.getElementById("apt-num-residues");
+    const aptNumTokens = document.getElementById("apt-num-tokens");
 
     // --- State ---
     let viewer = null;
@@ -27,7 +38,9 @@
     let currentOriginalPdb = null;
     let storedMetadata = null;  // metadata from encode, used in decode
     let decodeTimer = null;
-    let modelReady = false;
+    let modelReady = { bio2token: false, apt: false };
+    let currentTokenizer = "bio2token";
+    let aptState = { numResidues: null, numTokens: 0 };
 
     // --- 3Dmol viewer init ---
     function initViewer() {
@@ -108,21 +121,67 @@
         metaStatus.textContent = "Using default CA/ALA metadata";
     }
 
+    // --- Tokenizer switching ---
+    function clearState() {
+        tokenEditor.value = "";
+        tokenCount.textContent = "0 tokens";
+        currentDecodedPdb = null;
+        currentOriginalPdb = null;
+        storedMetadata = null;
+        aptState = { numResidues: null, numTokens: 0 };
+        showOriginalCheckbox.checked = false;
+        showOriginalCheckbox.disabled = true;
+        clearMetadataFields();
+        aptNumResidues.textContent = "-";
+        aptNumTokens.textContent = "-";
+        if (viewer) {
+            viewer.removeAllModels();
+            viewer.removeAllLabels();
+            viewer.render();
+        }
+    }
+
+    function switchTokenizer(tokenizer) {
+        if (tokenizer === currentTokenizer) return;
+        currentTokenizer = tokenizer;
+        clearState();
+
+        if (tokenizer === "apt") {
+            metadataPanel.style.display = "none";
+            aptOptions.style.display = "";
+            tokenEditor.placeholder = "Paste APT tokens here (1\u2013128 global tokens), e.g.:\n3842 1027 2955 512 3701 88 1444 2231";
+            // Default to sphere for CA-only structures
+            styleSelect.value = "sphere";
+        } else {
+            metadataPanel.style.display = "";
+            aptOptions.style.display = "none";
+            tokenEditor.placeholder = "Paste bio2token tokens here, e.g.:\n2239 2751 2619 1082 3131 3127 1591 2847";
+            styleSelect.value = "cartoon";
+        }
+    }
+
     // --- API calls ---
     async function decodeTokens(tokenIds) {
-        // Determine metadata: UI fields override stored metadata
-        const uiMetadata = parseMetadataFields();
-        const metadata = uiMetadata || storedMetadata;
+        const body = { token_ids: tokenIds, tokenizer: currentTokenizer };
 
-        const body = { token_ids: tokenIds };
-        if (metadata) {
-            if (metadata.atom_names) body.atom_names = metadata.atom_names;
-            if (metadata.residue_types) body.residue_types = metadata.residue_types;
-            if (metadata.residue_ids) body.residue_ids = metadata.residue_ids;
-        }
-        // chain_ids aren't editable in the UI, always use storedMetadata
-        if (storedMetadata && storedMetadata.chain_ids) {
-            body.chain_ids = storedMetadata.chain_ids;
+        if (currentTokenizer === "apt") {
+            body.n_steps = parseInt(aptSteps.value, 10);
+            if (aptState.numResidues) {
+                body.num_residues = aptState.numResidues;
+            }
+        } else {
+            // bio2token: include metadata
+            const uiMetadata = parseMetadataFields();
+            const metadata = uiMetadata || storedMetadata;
+            if (metadata) {
+                if (metadata.atom_names) body.atom_names = metadata.atom_names;
+                if (metadata.residue_types) body.residue_types = metadata.residue_types;
+                if (metadata.residue_ids) body.residue_ids = metadata.residue_ids;
+            }
+            // chain_ids aren't editable in the UI, always use storedMetadata
+            if (storedMetadata && storedMetadata.chain_ids) {
+                body.chain_ids = storedMetadata.chain_ids;
+            }
         }
 
         // Send ground-truth PDB for Kabsch alignment when available
@@ -147,7 +206,7 @@
         const formData = new FormData();
         formData.append("file", file);
 
-        const res = await fetch("/api/encode", {
+        const res = await fetch(`/api/encode?tokenizer=${currentTokenizer}`, {
             method: "POST",
             body: formData,
         });
@@ -163,7 +222,7 @@
         const res = await fetch("/api/encode-pdb-code", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pdb_code: code }),
+            body: JSON.stringify({ pdb_code: code, tokenizer: currentTokenizer }),
         });
 
         if (!res.ok) {
@@ -178,13 +237,20 @@
         tokenCount.textContent = `${result.num_tokens} tokens`;
         currentOriginalPdb = result.gt_pdb_string;
 
-        storedMetadata = {
-            atom_names: result.atom_names,
-            residue_types: result.residue_types,
-            residue_ids: result.residue_ids,
-            chain_ids: result.chain_ids,
-        };
-        populateMetadataFields(storedMetadata);
+        if (result.tokenizer === "apt") {
+            aptState.numResidues = result.num_residues;
+            aptState.numTokens = result.num_tokens;
+            aptNumResidues.textContent = result.num_residues || "-";
+            aptNumTokens.textContent = result.num_tokens;
+        } else {
+            storedMetadata = {
+                atom_names: result.atom_names,
+                residue_types: result.residue_types,
+                residue_ids: result.residue_ids,
+                chain_ids: result.chain_ids,
+            };
+            populateMetadataFields(storedMetadata);
+        }
 
         showOriginalCheckbox.disabled = false;
         showOriginalCheckbox.checked = true;
@@ -194,12 +260,12 @@
         renderStructures();
     }
 
-    // --- Atom click → token highlight ---
+    // --- Atom click -> token highlight ---
     let highlightedAtomIdx = -1;  // currently highlighted token index
 
     function onAtomClicked(atom) {
         if (!atom) return;
-        // atom.serial is 1-based PDB serial → token index is serial - 1
+        // atom.serial is 1-based PDB serial -> token index is serial - 1
         const tokenIdx = atom.serial - 1;
         highlightTokenInEditor(tokenIdx);
         highlightAtomInViewer(tokenIdx);
@@ -213,8 +279,7 @@
         tokenEditor.focus();
         tokenEditor.setSelectionRange(span.start, span.end);
 
-        // Scroll the selection into view — place the token roughly in the middle
-        // by computing approximate scroll position from character offset
+        // Scroll the selection into view
         const textBefore = tokenEditor.value.substring(0, span.start);
         const linesBefore = textBefore.split("\n").length - 1;
         const lineHeight = parseInt(getComputedStyle(tokenEditor).lineHeight) || 21;
@@ -291,7 +356,7 @@
         viewer.render();
     }
 
-    // Chain color palette — distinct colors for up to 12 chains
+    // Chain color palette -- distinct colors for up to 12 chains
     const CHAIN_COLORS = [
         "#e94560", "#52b788", "#4895ef", "#f9c74f",
         "#f3722c", "#90be6d", "#577590", "#f94144",
@@ -352,7 +417,12 @@
         if (decodeTimer) clearTimeout(decodeTimer);
         decodeTimer = setTimeout(async () => {
             const tokens = parseTokens(tokenEditor.value);
-            tokenCount.textContent = `${tokens.length} tokens`;
+
+            if (currentTokenizer === "apt") {
+                tokenCount.textContent = `${tokens.length} / 128 tokens`;
+            } else {
+                tokenCount.textContent = `${tokens.length} tokens`;
+            }
 
             if (tokens.length === 0) {
                 currentDecodedPdb = null;
@@ -360,7 +430,7 @@
                 return;
             }
 
-            if (!modelReady) return;
+            if (!modelReady[currentTokenizer]) return;
 
             statusIndicator.textContent = "Decoding...";
             statusIndicator.className = "status loading";
@@ -390,6 +460,22 @@
         scheduleDecode();
     });
 
+    // Tokenizer switch
+    tokenizerSelect.addEventListener("change", (e) => {
+        switchTokenizer(e.target.value);
+    });
+
+    // APT steps slider
+    aptSteps.addEventListener("input", () => {
+        aptStepsValue.textContent = aptSteps.value;
+    });
+    aptSteps.addEventListener("change", () => {
+        // Re-decode with new step count
+        if (parseTokens(tokenEditor.value).length > 0) {
+            scheduleDecode();
+        }
+    });
+
     fileInput.addEventListener("change", async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -411,7 +497,7 @@
     });
 
     async function loadPdbCode(code) {
-        if (!code || !modelReady) return;
+        if (!code || !modelReady[currentTokenizer]) return;
 
         statusIndicator.textContent = `Loading ${code.toUpperCase()}...`;
         statusIndicator.className = "status loading";
@@ -471,8 +557,21 @@
         try {
             const res = await fetch("/api/status");
             const data = await res.json();
-            if (data.model_loaded) {
-                modelReady = true;
+
+            modelReady.bio2token = data.bio2token_loaded;
+            modelReady.apt = data.apt_loaded;
+
+            // Enable/disable tokenizer options based on availability
+            for (const opt of tokenizerSelect.options) {
+                if (opt.value === "apt") {
+                    opt.disabled = !data.apt_loaded;
+                }
+                if (opt.value === "bio2token") {
+                    opt.disabled = !data.bio2token_loaded;
+                }
+            }
+
+            if (modelReady[currentTokenizer]) {
                 statusIndicator.textContent = "Ready";
                 statusIndicator.className = "status ready";
                 // Auto-load default PDB code on first ready
