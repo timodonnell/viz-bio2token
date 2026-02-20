@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import sys
-import types
 from typing import Optional
 
 import numpy as np
@@ -17,46 +15,12 @@ from viz_bio2token.bio2token_bridge import (
     _parse_pdb_coords,
 )
 
-
-def _patch_flex_attention():
-    """Ensure APT can import on PyTorch < 2.5 where flex_attention is missing.
-
-    APT unconditionally imports from torch.nn.attention.flex_attention at
-    module level.  On PyTorch 2.4 that subpackage doesn't exist, so we
-    inject a tiny stub *before* importing any APT code.
-    """
-    target = "torch.nn.attention.flex_attention"
-    if target in sys.modules:
-        return  # already available (PyTorch >= 2.5) or already patched
-
-    try:
-        __import__(target)
-        return  # real module exists
-    except (ImportError, ModuleNotFoundError):
-        pass
-
-    stub = types.ModuleType(target)
-    stub.flex_attention = None
-    stub.BlockMask = None
-    stub.create_block_mask = None
-    stub.and_masks = None
-    sys.modules[target] = stub
-
-    # Also ensure the parent chain exists
-    parent = "torch.nn.attention"
-    if parent not in sys.modules:
-        parent_mod = types.ModuleType(parent)
-        parent_mod.flex_attention = stub
-        sys.modules[parent] = parent_mod
-
-
-# Patch before any APT imports
-_patch_flex_attention()
-
-from apt.models import APTTokenizer  # noqa: E402
+# flex_attention patch applied in viz_bio2token.__init__
+from apt.models import APTTokenizer
 
 
 MAX_APT_TOKENS = 128
+MAX_APT_RESIDUES = 256  # DAE idx_embed supports up to 256 positions
 
 
 def _extract_ca_coords_and_metadata(pdb_string: str):
@@ -138,6 +102,13 @@ class APTBridge:
 
         if len(ca_coords) == 0:
             raise ValueError("No CA atoms found in PDB")
+
+        # Truncate to max supported sequence length
+        if len(ca_coords) > MAX_APT_RESIDUES:
+            ca_coords = ca_coords[:MAX_APT_RESIDUES]
+            res_names = res_names[:MAX_APT_RESIDUES]
+            chains = chains[:MAX_APT_RESIDUES]
+            res_nums = res_nums[:MAX_APT_RESIDUES]
 
         num_residues = len(ca_coords)
 

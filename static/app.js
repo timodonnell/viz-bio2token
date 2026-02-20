@@ -32,13 +32,21 @@
     const aptNumResidues = document.getElementById("apt-num-residues");
     const aptNumTokens = document.getElementById("apt-num-tokens");
 
+    // Kanzi options
+    const kanziOptions = document.getElementById("kanzi-options");
+    const kanziSteps = document.getElementById("kanzi-steps");
+    const kanziStepsValue = document.getElementById("kanzi-steps-value");
+    const kanziCfg = document.getElementById("kanzi-cfg");
+    const kanziCfgValue = document.getElementById("kanzi-cfg-value");
+    const kanziNumTokens = document.getElementById("kanzi-num-tokens");
+
     // --- State ---
     let viewer = null;
     let currentDecodedPdb = null;
     let currentOriginalPdb = null;
     let storedMetadata = null;  // metadata from encode, used in decode
     let decodeTimer = null;
-    let modelReady = { bio2token: false, apt: false };
+    let modelReady = { bio2token: false, apt: false, kanzi: false };
     let currentTokenizer = "bio2token";
     let aptState = { numResidues: null, numTokens: 0 };
 
@@ -134,6 +142,7 @@
         clearMetadataFields();
         aptNumResidues.textContent = "-";
         aptNumTokens.textContent = "-";
+        kanziNumTokens.textContent = "-";
         if (viewer) {
             viewer.removeAllModels();
             viewer.removeAllLabels();
@@ -149,12 +158,19 @@
         if (tokenizer === "apt") {
             metadataPanel.style.display = "none";
             aptOptions.style.display = "";
+            kanziOptions.style.display = "none";
             tokenEditor.placeholder = "Paste APT tokens here (1\u2013128 global tokens), e.g.:\n3842 1027 2955 512 3701 88 1444 2231";
-            // Default to sphere for CA-only structures
+            styleSelect.value = "sphere";
+        } else if (tokenizer === "kanzi") {
+            metadataPanel.style.display = "none";
+            aptOptions.style.display = "none";
+            kanziOptions.style.display = "";
+            tokenEditor.placeholder = "Paste Kanzi tokens here (1 per residue), e.g.:\n3842 1027 2955 512 3701 88 1444 2231";
             styleSelect.value = "sphere";
         } else {
             metadataPanel.style.display = "";
             aptOptions.style.display = "none";
+            kanziOptions.style.display = "none";
             tokenEditor.placeholder = "Paste bio2token tokens here, e.g.:\n2239 2751 2619 1082 3131 3127 1591 2847";
             styleSelect.value = "cartoon";
         }
@@ -164,7 +180,10 @@
     async function decodeTokens(tokenIds) {
         const body = { token_ids: tokenIds, tokenizer: currentTokenizer };
 
-        if (currentTokenizer === "apt") {
+        if (currentTokenizer === "kanzi") {
+            body.n_steps = parseInt(kanziSteps.value, 10);
+            body.cfg_weight = parseFloat(kanziCfg.value);
+        } else if (currentTokenizer === "apt") {
             body.n_steps = parseInt(aptSteps.value, 10);
             if (aptState.numResidues) {
                 body.num_residues = aptState.numResidues;
@@ -237,7 +256,9 @@
         tokenCount.textContent = `${result.num_tokens} tokens`;
         currentOriginalPdb = result.gt_pdb_string;
 
-        if (result.tokenizer === "apt") {
+        if (result.tokenizer === "kanzi") {
+            kanziNumTokens.textContent = result.num_tokens;
+        } else if (result.tokenizer === "apt") {
             aptState.numResidues = result.num_residues;
             aptState.numTokens = result.num_tokens;
             aptNumResidues.textContent = result.num_residues || "-";
@@ -418,7 +439,9 @@
         decodeTimer = setTimeout(async () => {
             const tokens = parseTokens(tokenEditor.value);
 
-            if (currentTokenizer === "apt") {
+            if (currentTokenizer === "kanzi") {
+                tokenCount.textContent = `${tokens.length} tokens (1 per residue)`;
+            } else if (currentTokenizer === "apt") {
                 tokenCount.textContent = `${tokens.length} / 128 tokens`;
             } else {
                 tokenCount.textContent = `${tokens.length} tokens`;
@@ -471,6 +494,24 @@
     });
     aptSteps.addEventListener("change", () => {
         // Re-decode with new step count
+        if (parseTokens(tokenEditor.value).length > 0) {
+            scheduleDecode();
+        }
+    });
+
+    // Kanzi sliders
+    kanziSteps.addEventListener("input", () => {
+        kanziStepsValue.textContent = kanziSteps.value;
+    });
+    kanziSteps.addEventListener("change", () => {
+        if (parseTokens(tokenEditor.value).length > 0) {
+            scheduleDecode();
+        }
+    });
+    kanziCfg.addEventListener("input", () => {
+        kanziCfgValue.textContent = parseFloat(kanziCfg.value).toFixed(1);
+    });
+    kanziCfg.addEventListener("change", () => {
         if (parseTokens(tokenEditor.value).length > 0) {
             scheduleDecode();
         }
@@ -560,6 +601,7 @@
 
             modelReady.bio2token = data.bio2token_loaded;
             modelReady.apt = data.apt_loaded;
+            modelReady.kanzi = data.kanzi_loaded;
 
             // Enable/disable tokenizer options based on availability
             for (const opt of tokenizerSelect.options) {
@@ -568,6 +610,9 @@
                 }
                 if (opt.value === "bio2token") {
                     opt.disabled = !data.bio2token_loaded;
+                }
+                if (opt.value === "kanzi") {
+                    opt.disabled = !data.kanzi_loaded;
                 }
             }
 

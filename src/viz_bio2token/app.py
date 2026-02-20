@@ -25,17 +25,20 @@ STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "static"
 class TokenizerType(str, Enum):
     bio2token = "bio2token"
     apt = "apt"
+    kanzi = "kanzi"
 
 
 bio2token_bridge = Bio2TokenBridge()
 apt_bridge = None  # initialized in lifespan
 apt_available = False
+kanzi_bridge = None  # initialized in lifespan
+kanzi_available = False
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load tokenizer models on startup."""
-    global apt_bridge, apt_available
+    global apt_bridge, apt_available, kanzi_bridge, kanzi_available
 
     print("Loading bio2token model...")
     bio2token_bridge.load()
@@ -48,6 +51,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"APT tokenizer not available: {e}")
         apt_available = False
+
+    try:
+        from viz_bio2token.kanzi_bridge import KanziBridge
+        kanzi_bridge = KanziBridge()
+        kanzi_bridge.load()
+        kanzi_available = True
+    except Exception as e:
+        print(f"Kanzi tokenizer not available: {e}")
+        kanzi_available = False
 
     yield
 
@@ -69,6 +81,8 @@ class DecodeRequest(BaseModel):
     # APT-specific
     num_residues: Optional[int] = None
     n_steps: Optional[int] = 100
+    # Kanzi-specific
+    cfg_weight: Optional[float] = 1.0
 
 
 class DecodeResponse(BaseModel):
@@ -97,6 +111,7 @@ class EncodeResponse(BaseModel):
 class StatusResponse(BaseModel):
     bio2token_loaded: bool
     apt_loaded: bool
+    kanzi_loaded: bool
 
 
 # --- Helpers ---
@@ -106,10 +121,14 @@ def _get_bridge(tokenizer: TokenizerType):
         if not bio2token_bridge.model_loaded:
             raise HTTPException(status_code=503, detail="bio2token model not loaded yet")
         return bio2token_bridge
-    else:
+    elif tokenizer == TokenizerType.apt:
         if not apt_available or apt_bridge is None or not apt_bridge.model_loaded:
             raise HTTPException(status_code=503, detail="APT model not available")
         return apt_bridge
+    else:
+        if not kanzi_available or kanzi_bridge is None or not kanzi_bridge.model_loaded:
+            raise HTTPException(status_code=503, detail="Kanzi model not available")
+        return kanzi_bridge
 
 
 # --- API endpoints ---
@@ -126,7 +145,14 @@ async def decode(req: DecodeRequest):
     if len(req.token_ids) == 0:
         raise HTTPException(status_code=400, detail="No token IDs provided")
 
-    if req.tokenizer == TokenizerType.apt:
+    if req.tokenizer == TokenizerType.kanzi:
+        result = bridge.decode_tokens(
+            token_ids=req.token_ids,
+            n_steps=req.n_steps or 100,
+            cfg_weight=req.cfg_weight or 1.0,
+            gt_pdb_string=req.gt_pdb_string,
+        )
+    elif req.tokenizer == TokenizerType.apt:
         result = bridge.decode_tokens(
             token_ids=req.token_ids,
             num_residues=req.num_residues,
@@ -223,6 +249,7 @@ async def status():
     return StatusResponse(
         bio2token_loaded=bio2token_bridge.model_loaded,
         apt_loaded=apt_available and apt_bridge is not None and apt_bridge.model_loaded,
+        kanzi_loaded=kanzi_available and kanzi_bridge is not None and kanzi_bridge.model_loaded,
     )
 
 

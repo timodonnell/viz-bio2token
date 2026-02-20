@@ -297,6 +297,43 @@ select {
     color: #a0a0b0;
 }
 
+/* Kanzi options panel */
+.kanzi-options {
+    border-top: 1px solid #0f3460;
+    background: #12192e;
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
+.kanzi-options-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.kanzi-slider-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #a0a0b0;
+    font-size: 12px;
+    flex: 1;
+}
+
+.kanzi-slider-label input[type="range"] {
+    flex: 1;
+    accent-color: #e94560;
+    height: 4px;
+    cursor: pointer;
+}
+
+.kanzi-info {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #a0a0b0;
+}
+
 select option:disabled {
     color: #555;
 }

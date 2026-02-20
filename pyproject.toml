@@ -15,12 +15,16 @@ dependencies = [
     "httpx>=0.27.0",
     "bio2token",
     "apt",
+    "kanzi",
 ]
 
 [project.scripts]
 viz-bio2token = "viz_bio2token.app:main"
 
 [tool.uv]
+override-dependencies = [
+    "torch==2.4.1+cu121",
+]
 find-links = [
     "https://data.pyg.org/whl/torch-2.4.0%2Bcu121.html",
 ]
@@ -31,6 +35,7 @@ mamba_ssm = { url = "https://github.com/state-spaces/mamba/releases/download/v2.
 torch = { index = "pytorch" }
 bio2token = { path = "/home/ubuntu/bio2token", editable = true }
 apt = { git = "https://github.com/rdilip/apt.git" }
+kanzi = { git = "https://github.com/rdilip/kanzi.git" }
 
 [[tool.uv.index]]
 name = "pytorch"

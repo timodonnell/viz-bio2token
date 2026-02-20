@@ -17,6 +17,7 @@
             <select id="tokenizer-select">
                 <option value="bio2token">bio2token</option>
                 <option value="apt">APT</option>
+                <option value="kanzi">Kanzi</option>
             </select>
             <div class="pdb-code-group">
                 <input type="text" id="pdb-code-input" placeholder="PDB code" maxlength="4" value="6O4Y">
@@ -79,6 +80,24 @@
                 <div class="apt-info">
                     <span id="apt-num-residues">-</span> residues |
                     <span id="apt-num-tokens">-</span> / 128 tokens
+                </div>
+            </div>
+
+            <div id="kanzi-options" class="kanzi-options" style="display: none;">
+                <div class="kanzi-options-row">
+                    <label class="kanzi-slider-label">
+                        Diffusion steps: <span id="kanzi-steps-value">100</span>
+                        <input type="range" id="kanzi-steps" min="10" max="500" value="100" step="10">
+                    </label>
+                </div>
+                <div class="kanzi-options-row">
+                    <label class="kanzi-slider-label">
+                        CFG weight: <span id="kanzi-cfg-value">1.0</span>
+                        <input type="range" id="kanzi-cfg" min="0.5" max="2.0" value="1.0" step="0.1">
+                    </label>
+                </div>
+                <div class="kanzi-info">
+                    <span id="kanzi-num-tokens">-</span> tokens (1 per residue)
                 </div>
             </div>
         </div>
